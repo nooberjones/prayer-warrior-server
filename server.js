@@ -49,6 +49,9 @@ io.on('connection', (socket) => {
       const { deviceId, pushToken, platform } = data;
       
       console.log(`📱 Registering device: ${deviceId}, has push token: ${!!pushToken}, platform: ${platform}`);
+      if (pushToken) {
+        console.log(`🔑 Push token preview: ${pushToken.substring(0, 30)}...`);
+      }
       
       // Store in memory for real-time
       connectedDevices.set(deviceId, {
@@ -57,19 +60,42 @@ io.on('connection', (socket) => {
         connectedAt: new Date()
       });
       
+      console.log(`🔗 Total connected devices: ${connectedDevices.size}`);
+      
       // Update/insert device token in database
       if (pushToken) {
         console.log(`💾 Storing push token for device ${deviceId}`);
-        await pool.query(
+        
+        // Check if device already exists
+        const existingDevice = await pool.query(
+          'SELECT device_id FROM device_tokens WHERE device_id = $1',
+          [deviceId]
+        );
+        
+        if (existingDevice.rows.length > 0) {
+          console.log(`🔄 Updating existing device: ${deviceId}`);
+        } else {
+          console.log(`🆕 Creating new device: ${deviceId}`);
+        }
+        
+        const result = await pool.query(
           `INSERT INTO device_tokens (device_id, push_token, platform) 
            VALUES ($1, $2, $3) 
            ON CONFLICT (device_id) 
            DO UPDATE SET 
            push_token = EXCLUDED.push_token, 
            platform = EXCLUDED.platform, 
-           updated_at = CURRENT_TIMESTAMP`,
+           updated_at = CURRENT_TIMESTAMP
+           RETURNING device_id, push_token IS NOT NULL as has_token`,
           [deviceId, pushToken, platform]
         );
+        
+        console.log(`✅ Device ${deviceId} registration result:`, result.rows[0]);
+        
+        // Show current total in database
+        const totalDevices = await pool.query('SELECT COUNT(*) as count FROM device_tokens');
+        console.log(`📊 Total devices in database: ${totalDevices.rows[0].count}`);
+        
       } else {
         console.log(`⚠️ No push token provided for device ${deviceId}`);
       }
@@ -510,17 +536,20 @@ app.get('/api/debug/devices', async (req, res) => {
     
     const columns = schemaResult.rows.map(row => row.column_name);
     
-    const result = await pool.query('SELECT * FROM device_tokens LIMIT 10');
+    // Get ALL devices, not just 10
+    const result = await pool.query('SELECT * FROM device_tokens ORDER BY device_id');
     
     res.json({
       columns: columns,
       totalDevices: result.rows.length,
       devicesWithTokens: result.rows.filter(d => d.push_token !== null && d.push_token !== '').length,
+      connectedDevicesInMemory: connectedDevices.size,
       devices: result.rows.map(d => ({
         deviceId: d.device_id,
         hasToken: !!(d.push_token && d.push_token !== ''),
         tokenPreview: d.push_token ? `${d.push_token.substring(0, 30)}...` : null,
-        platform: d.platform
+        platform: d.platform,
+        updatedAt: d.updated_at
       }))
     });
   } catch (error) {
