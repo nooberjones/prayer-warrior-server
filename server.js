@@ -501,17 +501,25 @@ app.get('/api/stats', async (req, res) => {
 // Debug endpoint to see registered devices
 app.get('/api/debug/devices', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM device_tokens ORDER BY device_id'
-    );
+    // First, let's see what columns exist
+    const schemaResult = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'device_tokens'
+    `);
+    
+    const columns = schemaResult.rows.map(row => row.column_name);
+    
+    const result = await pool.query('SELECT * FROM device_tokens LIMIT 10');
     
     res.json({
+      columns: columns,
       totalDevices: result.rows.length,
-      devicesWithTokens: result.rows.filter(d => d.push_token !== null).length,
+      devicesWithTokens: result.rows.filter(d => d.push_token !== null && d.push_token !== '').length,
       devices: result.rows.map(d => ({
         deviceId: d.device_id,
-        hasToken: d.push_token !== null,
-        tokenPreview: d.push_token ? `${d.push_token.substring(0, 20)}...` : null,
+        hasToken: !!(d.push_token && d.push_token !== ''),
+        tokenPreview: d.push_token ? `${d.push_token.substring(0, 30)}...` : null,
         platform: d.platform
       }))
     });
