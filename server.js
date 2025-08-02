@@ -550,32 +550,18 @@ app.post('/api/debug/test-notification', async (req, res) => {
       priority: 'normal'
     }));
 
-    const expoPushApiUrl = 'https://exp.host/--/api/v2/push/send';
-    
-    try {
-      const response = await fetch(expoPushApiUrl, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messages),
-      });
-      
-      const pushResult = await response.json();
-      console.log('🧪 Test notification sent:', pushResult);
-      
-      res.json({
-        success: true,
-        deviceCount: result.rows.length,
-        pushResult: pushResult
-      });
-      
-    } catch (fetchError) {
-      console.error('❌ Error sending test notification:', fetchError);
-      res.status(500).json({ error: 'Failed to send notification', details: fetchError.message });
-    }
+    // For now, just return what would be sent without actually sending
+    res.json({
+      success: true,
+      deviceCount: result.rows.length,
+      wouldSendTo: result.rows.map(d => ({
+        deviceId: d.device_id,
+        platform: d.platform,
+        tokenPreview: d.push_token.substring(0, 20) + '...'
+      })),
+      messageCount: messages.length,
+      note: 'Notifications prepared but not sent (test mode)'
+    });
     
   } catch (error) {
     console.error('Error in test notification:', error);
