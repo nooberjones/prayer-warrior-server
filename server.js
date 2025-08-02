@@ -529,6 +529,60 @@ app.get('/api/debug/devices', async (req, res) => {
   }
 });
 
+// Test endpoint to send a notification to all registered devices
+app.post('/api/debug/test-notification', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM device_tokens WHERE push_token IS NOT NULL');
+    
+    if (result.rows.length === 0) {
+      return res.json({ success: false, message: 'No devices with push tokens found' });
+    }
+
+    const messages = result.rows.map(device => ({
+      to: device.push_token,
+      sound: 'default',
+      title: 'Test Notification 🧪',
+      body: 'This is a test notification to verify push notifications are working!',
+      data: {
+        type: 'test',
+        timestamp: new Date().toISOString()
+      },
+      priority: 'normal'
+    }));
+
+    const expoPushApiUrl = 'https://exp.host/--/api/v2/push/send';
+    
+    try {
+      const response = await fetch(expoPushApiUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      });
+      
+      const pushResult = await response.json();
+      console.log('🧪 Test notification sent:', pushResult);
+      
+      res.json({
+        success: true,
+        deviceCount: result.rows.length,
+        pushResult: pushResult
+      });
+      
+    } catch (fetchError) {
+      console.error('❌ Error sending test notification:', fetchError);
+      res.status(500).json({ error: 'Failed to send notification', details: fetchError.message });
+    }
+    
+  } catch (error) {
+    console.error('Error in test notification:', error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
 // Database initialization endpoint
 app.post('/api/init-database', async (req, res) => {
   try {
