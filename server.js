@@ -398,6 +398,39 @@ app.get('/api/prayer-counts', async (req, res) => {
   }
 });
 
+// Get active prayer requests
+app.get('/api/active-requests', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        pr.id,
+        pr.topic_id as "topicId", 
+        pr.created_at as timestamp,
+        pr.device_id as "deviceId",
+        COALESCE(ps.active_count, 0) as "activeCount"
+      FROM prayer_requests pr
+      LEFT JOIN (
+        SELECT 
+          request_id, 
+          COUNT(*) as active_count 
+        FROM prayer_sessions 
+        WHERE ended_at IS NULL 
+        GROUP BY request_id
+      ) ps ON pr.id = ps.request_id
+      WHERE pr.expires_at > NOW()
+      ORDER BY pr.created_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting active requests:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get active requests'
+    });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
