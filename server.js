@@ -129,18 +129,21 @@ io.on('connection', (socket) => {
         [requestId]
       );
       
-      // Get updated count
+      // Get updated count and topicId
       const result = await pool.query(
-        'SELECT active_count FROM prayer_requests WHERE id = $1',
+        'SELECT active_count, topic_id FROM prayer_requests WHERE id = $1',
         [requestId]
       );
       
       const activeCount = result.rows[0]?.active_count || 0;
+      const topicId = result.rows[0]?.topic_id;
       
       // Broadcast count update
       io.emit('prayerCountUpdate', {
         requestId,
-        count: activeCount
+        topicId,
+        change: 1,
+        newCount: activeCount
       });
       
       if (callback) callback({ success: true });
@@ -150,14 +153,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Stop praying
+    // Stop praying
   socket.on('stopPraying', async (data, callback) => {
     try {
       const { deviceId, requestId } = data;
       
       // End prayer session
       await pool.query(
-        'UPDATE prayer_sessions SET ended_at = CURRENT_TIMESTAMP WHERE device_id = $1 AND request_id = $2 AND ended_at IS NULL',
+        'UPDATE prayer_sessions SET ended_at = NOW() WHERE device_id = $1 AND request_id = $2 AND ended_at IS NULL',
         [deviceId, requestId]
       );
       
@@ -172,18 +175,21 @@ io.on('connection', (socket) => {
         [requestId]
       );
       
-      // Get updated count
+      // Get updated count and topicId
       const result = await pool.query(
-        'SELECT active_count FROM prayer_requests WHERE id = $1',
+        'SELECT active_count, topic_id FROM prayer_requests WHERE id = $1',
         [requestId]
       );
       
       const activeCount = result.rows[0]?.active_count || 0;
+      const topicId = result.rows[0]?.topic_id;
       
       // Broadcast count update
       io.emit('prayerCountUpdate', {
         requestId,
-        count: activeCount
+        topicId,
+        change: -1,
+        newCount: activeCount
       });
       
       if (callback) callback({ success: true });
