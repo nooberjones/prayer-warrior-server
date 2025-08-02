@@ -498,6 +498,30 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// Debug endpoint to see registered devices
+app.get('/api/debug/devices', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT device_id, push_token IS NOT NULL as has_token, platform, created_at, updated_at FROM device_tokens ORDER BY updated_at DESC'
+    );
+    
+    res.json({
+      totalDevices: result.rows.length,
+      devicesWithTokens: result.rows.filter(d => d.has_token).length,
+      devices: result.rows.map(d => ({
+        deviceId: d.device_id,
+        hasToken: d.has_token,
+        platform: d.platform,
+        createdAt: d.created_at,
+        updatedAt: d.updated_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Database initialization endpoint
 app.post('/api/init-database', async (req, res) => {
   try {
