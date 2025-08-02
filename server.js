@@ -3,6 +3,7 @@ const { Pool } = require('pg');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
@@ -250,7 +251,48 @@ io.on('connection', (socket) => {
   });
 });
 
-// Push notification function (implement with your preferred service)
+// Cleanup function to remove old prayer requests
+async function cleanupOldPrayerRequests() {
+  try {
+    // Remove prayer requests older than 24 hours
+    const result = await pool.query(
+      `UPDATE prayer_requests 
+       SET is_active = false 
+       WHERE created_at < NOW() - INTERVAL '24 hours' 
+       AND is_active = true`
+    );
+    
+    // End any prayer sessions for expired requests
+    await pool.query(
+      `UPDATE prayer_sessions 
+       SET ended_at = CURRENT_TIMESTAMP 
+       WHERE request_id IN (
+         SELECT id FROM prayer_requests 
+         WHERE is_active = false AND ended_at IS NULL
+       ) AND ended_at IS NULL`
+    );
+    
+    if (result.rowCount > 0) {
+      console.log(`🧹 Cleaned up ${result.rowCount} expired prayer requests`);
+      
+      // Notify all connected clients about the updates
+      io.emit('prayerRequestUpdate', {
+        type: 'cleanup_complete',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Error cleaning up old prayer requests:', error);
+  }
+}
+
+// Run cleanup every hour
+setInterval(cleanupOldPrayerRequests, 60 * 60 * 1000);
+
+// Run initial cleanup on server start
+setTimeout(cleanupOldPrayerRequests, 5000);
+
+// Push notification function with Expo Push API
 async function sendPushNotifications(topicId, requestId) {
   try {
     // Get topic title
@@ -263,22 +305,99 @@ async function sendPushNotifications(topicId, requestId) {
     
     const topicTitle = topicResult.rows[0].title;
     
-    // Get all device tokens
+    // Get all device tokens except the requester's device
     const deviceResult = await pool.query(
-      'SELECT push_token, platform FROM device_tokens WHERE push_token IS NOT NULL'
+      `SELECT push_token, platform, device_id FROM device_tokens 
+       WHERE push_token IS NOT NULL 
+       AND device_id != (
+         SELECT device_id FROM prayer_requests WHERE id = $1
+       )`,
+      [requestId]
     );
     
-    console.log(`Would send push notification to ${deviceResult.rows.length} devices for: ${topicTitle}`);
+    if (deviceResult.rows.length === 0) {
+      console.log('No devices to notify');
+      return;
+    }
     
-    // Implement actual push notification sending here
-    // You can use Expo Push API, Firebase, or any other service
+    console.log(`📱 Sending push notifications to ${deviceResult.rows.length} devices for: ${topicTitle}`);
+    
+    // Prepare push notification messages
+    const messages = deviceResult.rows.map(device => ({
+      to: device.push_token,
+      sound: 'default',
+      title: 'Prayer Request 🙏',
+      body: `Someone needs prayer for: ${topicTitle}`,
+      data: {
+        type: 'prayer_request',
+        topicId: topicId,
+        requestId: requestId,
+        topicTitle: topicTitle
+      },
+      categoryId: 'prayer_request',
+      priority: 'normal'
+    }));
+    
+    // Send notifications in batches to Expo Push API
+    const expoPushApiUrl = 'https://exp.host/--/api/v2/push/send';
+    
+    try {
+      const response = await fetch(expoPushApiUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      });
+      
+      const result = await response.json();
+      console.log('✅ Push notifications sent successfully:', result);
+      
+    } catch (fetchError) {
+      console.error('❌ Error sending push notifications:', fetchError);
+    }
     
   } catch (error) {
-    console.error('Error sending push notifications:', error);
+    console.error('Error preparing push notifications:', error);
   }
 }
 
 // REST API endpoints
+
+// Get current prayer topic counts
+app.get('/api/prayer-counts', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        topic_id,
+        COUNT(*) as count
+      FROM prayer_requests 
+      WHERE is_active = true 
+      GROUP BY topic_id
+    `);
+    
+    // Convert to object format
+    const counts = {};
+    result.rows.forEach(row => {
+      counts[row.topic_id] = parseInt(row.count);
+    });
+    
+    res.json({
+      success: true,
+      counts: counts,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error getting prayer counts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get prayer counts'
+    });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
