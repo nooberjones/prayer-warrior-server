@@ -502,7 +502,7 @@ app.get('/api/stats', async (req, res) => {
 app.get('/api/debug/devices', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT device_id, push_token, platform, created_at, updated_at FROM device_tokens ORDER BY updated_at DESC'
+      'SELECT * FROM device_tokens ORDER BY device_id'
     );
     
     res.json({
@@ -512,9 +512,7 @@ app.get('/api/debug/devices', async (req, res) => {
         deviceId: d.device_id,
         hasToken: d.push_token !== null,
         tokenPreview: d.push_token ? `${d.push_token.substring(0, 20)}...` : null,
-        platform: d.platform,
-        createdAt: d.created_at,
-        updatedAt: d.updated_at
+        platform: d.platform
       }))
     });
   } catch (error) {
