@@ -672,6 +672,8 @@ app.post('/api/init-database', async (req, res) => {
     await pool.query(`
       INSERT INTO prayer_topics (id, title, category, parent_id) VALUES
       (1, 'Job', 'main', NULL),
+      (16, 'I just lost my job', 'job', 1),
+      (17, 'I need a job', 'job', 1),
       (2, 'Money', 'main', NULL),
       (3, 'Spouse', 'main', NULL),
       (4, 'Spouse - Infidelity', 'spouse', 3),
