@@ -122,7 +122,34 @@ io.on('connection', (socket) => {
       
       const requestId = result.rows[0].id;
       
-      // Notify all connected devices
+      // Get topic title for notifications
+      const topicResult = await pool.query('SELECT title FROM prayer_topics WHERE id = $1', [topicId]);
+      const topicTitle = topicResult.rows[0]?.title || 'Unknown';
+      
+      // Notify all connected devices via socket (real-time notification)
+      console.log(`🔔 Sending real-time notifications to ${connectedDevices.size} connected devices`);
+      
+      connectedDevices.forEach((deviceInfo, deviceIdKey) => {
+        if (deviceIdKey !== deviceId) { // Don't notify the requesting device
+          const targetSocket = io.sockets.sockets.get(deviceInfo.socketId);
+          if (targetSocket) {
+            console.log(`📱 Sending notification to device: ${deviceIdKey}`);
+            targetSocket.emit('prayerRequestNotification', {
+              type: 'prayer_request',
+              title: 'Prayer Request 🙏',
+              body: `Someone needs prayer for: ${topicTitle}`,
+              data: {
+                topicId: topicId,
+                requestId: requestId,
+                topicTitle: topicTitle,
+                timestamp: timestamp
+              }
+            });
+          }
+        }
+      });
+      
+      // Also send the regular broadcast for UI updates
       socket.broadcast.emit('prayerRequestUpdate', {
         type: 'new_request',
         topicId,
@@ -130,7 +157,7 @@ io.on('connection', (socket) => {
         timestamp
       });
       
-      // Send push notifications (implement with your preferred service)
+      // Send push notifications (for production builds with real tokens)
       await sendPushNotifications(topicId, requestId);
       
       callback({ success: true, requestId });
