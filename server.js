@@ -48,6 +48,8 @@ io.on('connection', (socket) => {
     try {
       const { deviceId, pushToken, platform } = data;
       
+      console.log(`📱 Registering device: ${deviceId}, has push token: ${!!pushToken}, platform: ${platform}`);
+      
       // Store in memory for real-time
       connectedDevices.set(deviceId, {
         socketId: socket.id,
@@ -57,6 +59,7 @@ io.on('connection', (socket) => {
       
       // Update/insert device token in database
       if (pushToken) {
+        console.log(`💾 Storing push token for device ${deviceId}`);
         await pool.query(
           `INSERT INTO device_tokens (device_id, push_token, platform) 
            VALUES ($1, $2, $3) 
@@ -67,6 +70,8 @@ io.on('connection', (socket) => {
            updated_at = CURRENT_TIMESTAMP`,
           [deviceId, pushToken, platform]
         );
+      } else {
+        console.log(`⚠️ No push token provided for device ${deviceId}`);
       }
       
       console.log(`Device registered: ${deviceId}`);
@@ -80,6 +85,8 @@ io.on('connection', (socket) => {
   socket.on('createPrayerRequest', async (data, callback) => {
     try {
       const { deviceId, topicId, timestamp } = data;
+      
+      console.log(`📝 Creating prayer request from device: ${deviceId} for topic: ${topicId}`);
       
       // Insert prayer request into database
       const result = await pool.query(
@@ -321,8 +328,21 @@ async function sendPushNotifications(topicId, requestId) {
       [requestId]
     );
     
+    console.log(`🔍 Found ${deviceResult.rows.length} devices to notify (excluding requester)`);
+    console.log('Device tokens found:', deviceResult.rows.map(d => ({ 
+      deviceId: d.device_id, 
+      hasToken: !!d.push_token,
+      platform: d.platform 
+    })));
+    
     if (deviceResult.rows.length === 0) {
-      console.log('No devices to notify');
+      console.log('No devices to notify - checking all registered devices:');
+      const allDevices = await pool.query('SELECT device_id, push_token, platform FROM device_tokens');
+      console.log('All devices in database:', allDevices.rows.map(d => ({ 
+        deviceId: d.device_id, 
+        hasToken: !!d.push_token,
+        platform: d.platform 
+      })));
       return;
     }
     
