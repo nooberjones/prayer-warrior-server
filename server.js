@@ -496,7 +496,8 @@ app.get('/api/active-requests', async (req, res) => {
         WHERE ended_at IS NULL 
         GROUP BY request_id
       ) ps ON pr.id = ps.request_id
-      WHERE pr.expires_at > NOW()
+      WHERE pr.is_active = true 
+        AND pr.created_at > NOW() - INTERVAL '24 hours'
       ORDER BY pr.created_at DESC
     `);
 
