@@ -669,12 +669,15 @@ app.post('/api/init-database', async (req, res) => {
     `);
 
     // Insert prayer topics (use INSERT ... ON CONFLICT to avoid duplicates)
+    console.log('🗄️  Inserting prayer topics into database...');
     await pool.query(`
       INSERT INTO prayer_topics (id, title, category, parent_id) VALUES
       (1, 'Job', 'main', NULL),
       (16, 'I just lost my job', 'job', 1),
       (17, 'I need a job', 'job', 1),
-      (2, 'Money', 'main', NULL),
+      (2, 'Finances', 'main', NULL),
+      (18, 'Budget Help', 'Finances', 2),
+      (19, 'Work - Raise', 'Finances', 2),
       (3, 'Spouse', 'main', NULL),
       (4, 'Spouse - Infidelity', 'spouse', 3),
       (5, 'Spouse - Divorce', 'spouse', 3),
@@ -687,9 +690,14 @@ app.post('/api/init-database', async (req, res) => {
       (12, 'Health - Friend', 'health', 10),
       (13, 'Health - Parent', 'health', 10),
       (14, 'Health - Child', 'health', 10),
+      (20, 'Pregnancy', 'health', 10),
       (15, 'Other - God will know', 'main', NULL)
-      ON CONFLICT (id) DO NOTHING;
+      ON CONFLICT (id) DO UPDATE SET 
+        title = EXCLUDED.title,
+        category = EXCLUDED.category,
+        parent_id = EXCLUDED.parent_id;
     `);
+    console.log('✅ Prayer topics inserted/updated successfully');
 
     // Update the sequence to continue from 15
     await pool.query(`SELECT setval('prayer_topics_id_seq', 15, true);`);
@@ -714,6 +722,29 @@ app.post('/api/init-database', async (req, res) => {
     console.error('Database initialization error:', error);
     res.status(500).json({ 
       success: false,
+      error: error.message 
+    });
+  }
+});
+
+// Debug endpoint to check prayer topics
+app.get('/api/debug/topics', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, title, category, parent_id 
+      FROM prayer_topics 
+      ORDER BY id ASC
+    `);
+    
+    res.json({
+      success: true,
+      count: result.rows.length,
+      topics: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching prayer topics:', error);
+    res.status(500).json({ 
+      success: false, 
       error: error.message 
     });
   }

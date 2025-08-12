@@ -41,7 +41,11 @@ CREATE TABLE device_tokens (
 -- Insert prayer topics (hierarchical structure)
 INSERT INTO prayer_topics (id, title, category, parent_id) VALUES
 (1, 'Job', 'main', NULL),
-(2, 'Money', 'main', NULL),
+(16, 'I just lost my job', 'job', 1),
+(17, 'I need a job', 'job', 1),
+(2, 'Finances', 'main', NULL),
+(18, 'Budget Help', 'Finances', 2),
+(19, 'Work - Raise', 'Finances', 2),
 (3, 'Spouse', 'main', NULL),
 (4, 'Spouse - Infidelity', 'spouse', 3),
 (5, 'Spouse - Divorce', 'spouse', 3),
@@ -54,10 +58,11 @@ INSERT INTO prayer_topics (id, title, category, parent_id) VALUES
 (12, 'Health - Friend', 'health', 10),
 (13, 'Health - Parent', 'health', 10),
 (14, 'Health - Child', 'health', 10),
+(20, 'Pregnancy', 'health', 10),
 (15, 'Other - God will know', 'main', NULL);
 
--- Update the sequence to continue from 15
-SELECT setval('prayer_topics_id_seq', 15, true);
+-- Update the sequence to continue from 20
+SELECT setval('prayer_topics_id_seq', 20, true);
 
 -- Create indexes for better performance
 CREATE INDEX idx_prayer_requests_topic_id ON prayer_requests(topic_id);
