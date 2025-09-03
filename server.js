@@ -626,6 +626,120 @@ app.post('/api/debug/test-notification', async (req, res) => {
   }
 });
 
+// Register push token endpoint
+app.post('/api/register-push-token', async (req, res) => {
+  try {
+    const { deviceId, pushToken, platform } = req.body;
+    
+    console.log(`📡 API: Registering push token for device: ${deviceId}, platform: ${platform}`);
+    
+    if (!deviceId || !pushToken) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Device ID and push token are required' 
+      });
+    }
+
+    // Update/insert device token in database
+    const result = await pool.query(
+      `INSERT INTO device_tokens (device_id, push_token, platform) 
+       VALUES ($1, $2, $3) 
+       ON CONFLICT (device_id) 
+       DO UPDATE SET 
+       push_token = EXCLUDED.push_token, 
+       platform = EXCLUDED.platform, 
+       updated_at = CURRENT_TIMESTAMP
+       RETURNING device_id, push_token IS NOT NULL as has_token`,
+      [deviceId, pushToken, platform]
+    );
+    
+    console.log(`✅ API: Push token registered for device ${deviceId}:`, result.rows[0]);
+    
+    res.json({ 
+      success: true, 
+      message: 'Push token registered successfully',
+      deviceId,
+      hasToken: result.rows[0].has_token
+    });
+    
+  } catch (error) {
+    console.error('❌ API: Error registering push token:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to register push token',
+      details: error.message
+    });
+  }
+});
+
+// Test notification endpoint for specific device
+app.post('/api/test-notification', async (req, res) => {
+  try {
+    const { pushToken, deviceId, title = 'Test Notification', body = 'This is a test!' } = req.body;
+    
+    if (!pushToken) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Push token is required' 
+      });
+    }
+
+    console.log(`🧪 Sending test notification to token: ${pushToken.substring(0, 20)}...`);
+
+    const message = {
+      to: pushToken,
+      sound: 'default',
+      title,
+      body,
+      data: {
+        type: 'test',
+        deviceId,
+        timestamp: new Date().toISOString()
+      },
+      priority: 'normal'
+    };
+
+    // Send to Expo Push API
+    const expoPushApiUrl = 'https://exp.host/--/api/v2/push/send';
+    
+    const response = await fetch(expoPushApiUrl, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([message]), // Expo expects an array
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      console.log('✅ Test notification sent successfully:', result);
+      res.json({ 
+        success: true, 
+        message: 'Test notification sent successfully',
+        expoPushResponse: result
+      });
+    } else {
+      console.error('❌ Expo Push API error:', result);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to send notification via Expo Push API',
+        details: result
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error sending test notification:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send test notification',
+      details: error.message
+    });
+  }
+});
+
 // Database initialization endpoint
 app.post('/api/init-database', async (req, res) => {
   try {
