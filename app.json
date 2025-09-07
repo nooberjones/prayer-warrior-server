@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "296684e3-7d39-4047-9f5a-6269442f6bd8"
+      }
+    },
+    "android": {
+      "package": "com.coirle.prayerwarrior"
+    }
+  }
+}

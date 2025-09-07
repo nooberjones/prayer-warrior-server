@@ -401,7 +401,7 @@ async function sendPushNotifications(topicId, requestId) {
     
     console.log(`📱 Sending push notifications to ${deviceResult.rows.length} devices for: ${topicTitle}`);
     
-    // Prepare push notification messages
+    // Prepare push notification messages with proper background delivery settings
     const messages = deviceResult.rows.map(device => ({
       to: device.push_token,
       sound: 'default',
@@ -414,7 +414,31 @@ async function sendPushNotifications(topicId, requestId) {
         topicTitle: topicTitle
       },
       categoryId: 'prayer_request',
-      priority: 'normal'
+      priority: 'high', // Ensures delivery even when app is backgrounded/closed
+      ttl: 3600, // Time to live in seconds (1 hour)
+      badge: 1,
+      channelId: device.platform === 'android' ? 'prayer_requests' : undefined, // Use high-priority channel on Android
+      android: {
+        priority: 'high',
+        channelId: 'prayer_requests',
+        sound: 'default',
+        vibrate: [0, 250, 250, 250],
+        color: '#6B46C1',
+        icon: 'notification_icon',
+        sticky: false,
+        autoCancel: true,
+      },
+      ios: {
+        sound: 'default',
+        badge: 1,
+        categoryId: 'prayer_request',
+        mutableContent: false,
+        criticalSound: {
+          critical: false,
+          name: 'default',
+          volume: 1.0,
+        },
+      },
     }));
     
     // Send notifications in batches to Expo Push API
